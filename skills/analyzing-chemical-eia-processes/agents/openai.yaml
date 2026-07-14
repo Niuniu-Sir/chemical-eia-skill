@@ -1,0 +1,4 @@
+interface:
+  display_name: "化工环评初步工艺建模"
+  short_description: "建立可追溯化工工序流股模型并执行诊断性核算和分级核实工作"
+  default_prompt: "使用 $analyzing-chemical-eia-processes 读取化工项目资料，建立可追溯工序流股模型。"

@@ -1,0 +1,5 @@
+{
+  "name": "analyzing-chemical-eia-processes",
+  "canonical_skill": "../../skills/analyzing-chemical-eia-processes/SKILL.md",
+  "install_target": ".claude/skills/analyzing-chemical-eia-processes/SKILL.md"
+}

@@ -1,0 +1,34 @@
+name: Public test matrix
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  public-tests:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install build tools
+        run: python -m pip install --upgrade pip build
+      - name: Run self-contained public tests
+        run: python -m unittest discover -s tests/public -t . -v
+      - name: Build and verify release assets
+        run: >-
+          python -c "import json; from pathlib import Path; from tools.public_checksums import verify_sha256s, write_sha256s; from tools.release_artifacts import build_artifacts, build_skill_archive, inspect_artifact; root=Path('.'); dist=Path('dist'); policy=json.loads(Path('release/public-release-policy.json').read_text(encoding='utf-8')); wheel,sdist=build_artifacts(root,dist); skill=build_skill_archive(Path('skills/analyzing-chemical-eia-processes'),dist/'analyzing-chemical-eia-processes-0.1.0.zip'); assert inspect_artifact(wheel,policy['wheel_exact_files']) == []; assert inspect_artifact(sdist,policy['sdist_exact_files']+policy['sdist_exact_directories']) == []; assert inspect_artifact(skill,policy['skill_zip_exact_files']) == []; manifest=write_sha256s([skill,wheel,sdist],dist/'SHA256SUMS.txt'); verify_sha256s(manifest,dist,[skill.name,wheel.name,sdist.name])"
+      - name: Install wheel in a clean environment and run smoke tests
+        run: >-
+          python -c "import os, subprocess, sys; from pathlib import Path; env=Path('.release-venv'); subprocess.run([sys.executable,'-m','venv',str(env)],check=True); py=env/('Scripts/python.exe' if os.name == 'nt' else 'bin/python'); wheel=Path('dist/chemical_eia_core-0.1.0-py3-none-any.whl'); subprocess.run([str(py),'-m','pip','install','--no-index','--no-deps',str(wheel)],check=True); subprocess.run([str(py),'-m','chemical_eia.cli','--help'],check=True); subprocess.run([str(py),'-m','chemical_eia.cli','examples/minimal/model.json','--output-dir','.release-smoke'],check=True)"

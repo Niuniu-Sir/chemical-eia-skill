@@ -1,0 +1,247 @@
+{
+  "schema_version": "1.0",
+  "project_id": "PUBLIC-FICTIONAL-MINIMAL",
+  "project_name": "From-scratch fictional minimal process",
+  "sources": [
+    {
+      "source_id": "SRC-PUBLIC-FICTION",
+      "description": "Completely fictional information designed from scratch only for public software demonstration."
+    }
+  ],
+  "parameters": {
+    "conversion": {
+      "candidates": [
+        {
+          "value": 0.8,
+          "unit": "fraction",
+          "value_basis": "ai_suggested",
+          "adoption_status": "pending",
+          "review_status": "provisional",
+          "source_ids": [
+            "SRC-PUBLIC-FICTION"
+          ],
+          "suggestion_basis": "Fictional demonstration value selected from scratch.",
+          "selection_logic": "Use one round number solely to exercise deterministic formulas.",
+          "affected_result_ids": [
+            "CAL-RXN-PUBLIC"
+          ],
+          "impact_level": "high",
+          "version": 1
+        }
+      ],
+      "active_version": 1
+    }
+  },
+  "nodes": [
+    {
+      "node_id": "N-DOSING",
+      "node_name": "Fictional dosing",
+      "operation_type": "dosing",
+      "source_scope": "process_direct",
+      "input_stream_ids": [
+        "S-FEED"
+      ],
+      "output_stream_ids": [
+        "S-PREMIX"
+      ],
+      "component_balance_required": true
+    },
+    {
+      "node_id": "N-FICTIONAL-REACTION",
+      "node_name": "Fictional reaction",
+      "operation_type": "reaction",
+      "source_scope": "process_direct",
+      "input_stream_ids": [
+        "S-PREMIX"
+      ],
+      "output_stream_ids": [
+        "S-REACTED"
+      ],
+      "component_balance_required": false
+    },
+    {
+      "node_id": "N-GAS-LIQUID-SEPARATION",
+      "node_name": "Fictional gas-liquid separation",
+      "operation_type": "gas_liquid_separation",
+      "source_scope": "process_direct",
+      "input_stream_ids": [
+        "S-REACTED"
+      ],
+      "output_stream_ids": [
+        "S-PRODUCT",
+        "S-PURGE"
+      ],
+      "component_balance_required": true
+    }
+  ],
+  "streams": [
+    {
+      "stream_id": "S-FEED",
+      "declared_name": "Fictional feed",
+      "from_node": null,
+      "to_node": "N-DOSING",
+      "stream_role": "feed",
+      "total_mass": 100,
+      "components": [
+        {
+          "material_id": "FEED-A",
+          "mass": 80
+        },
+        {
+          "material_id": "REAGENT-B",
+          "mass": 20
+        }
+      ]
+    },
+    {
+      "stream_id": "S-PREMIX",
+      "declared_name": "Fictional premix",
+      "from_node": "N-DOSING",
+      "to_node": "N-FICTIONAL-REACTION",
+      "stream_role": "process",
+      "total_mass": 100,
+      "components": [
+        {
+          "material_id": "FEED-A",
+          "mass": 80
+        },
+        {
+          "material_id": "REAGENT-B",
+          "mass": 20
+        }
+      ]
+    },
+    {
+      "stream_id": "S-REACTED",
+      "declared_name": "Fictional reacted stream",
+      "from_node": "N-FICTIONAL-REACTION",
+      "to_node": "N-GAS-LIQUID-SEPARATION",
+      "stream_role": "process",
+      "total_mass": 100,
+      "components": [
+        {
+          "material_id": "FEED-A",
+          "mass": 16
+        },
+        {
+          "material_id": "REAGENT-B",
+          "mass": 4
+        },
+        {
+          "material_id": "INTERMEDIATE-C",
+          "mass": 32
+        },
+        {
+          "material_id": "PRODUCT-D",
+          "mass": 32
+        },
+        {
+          "material_id": "PURGE-E",
+          "mass": 16
+        }
+      ]
+    },
+    {
+      "stream_id": "S-PRODUCT",
+      "declared_name": "Fictional product branch",
+      "from_node": "N-GAS-LIQUID-SEPARATION",
+      "to_node": null,
+      "stream_role": "product",
+      "total_mass": 75,
+      "components": [
+        {
+          "material_id": "FEED-A",
+          "mass": 12
+        },
+        {
+          "material_id": "REAGENT-B",
+          "mass": 3
+        },
+        {
+          "material_id": "INTERMEDIATE-C",
+          "mass": 24
+        },
+        {
+          "material_id": "PRODUCT-D",
+          "mass": 24
+        },
+        {
+          "material_id": "PURGE-E",
+          "mass": 12
+        }
+      ]
+    },
+    {
+      "stream_id": "S-PURGE",
+      "declared_name": "Fictional purge branch",
+      "from_node": "N-GAS-LIQUID-SEPARATION",
+      "to_node": null,
+      "stream_role": "waste",
+      "total_mass": 25,
+      "components": [
+        {
+          "material_id": "FEED-A",
+          "mass": 4
+        },
+        {
+          "material_id": "REAGENT-B",
+          "mass": 1
+        },
+        {
+          "material_id": "INTERMEDIATE-C",
+          "mass": 8
+        },
+        {
+          "material_id": "PRODUCT-D",
+          "mass": 8
+        },
+        {
+          "material_id": "PURGE-E",
+          "mass": 4
+        }
+      ]
+    }
+  ],
+  "reaction_calculations": [
+    {
+      "reaction_id": "RXN-PUBLIC",
+      "node_id": "N-FICTIONAL-REACTION",
+      "conversion_path": "parameters.conversion",
+      "limiting_mass": 80,
+      "limiting_mw": 100,
+      "limiting_coefficient": -1,
+      "initial_masses": {
+        "FEED-A": 80,
+        "REAGENT-B": 20,
+        "INTERMEDIATE-C": 0,
+        "PRODUCT-D": 0,
+        "PURGE-E": 0
+      },
+      "species": {
+        "FEED-A": {
+          "coefficient": -1,
+          "mw": 100
+        },
+        "REAGENT-B": {
+          "coefficient": -1,
+          "mw": 25
+        },
+        "INTERMEDIATE-C": {
+          "coefficient": 1,
+          "mw": 50
+        },
+        "PRODUCT-D": {
+          "coefficient": 1,
+          "mw": 50
+        },
+        "PURGE-E": {
+          "coefficient": 1,
+          "mw": 25
+        }
+      },
+      "source_ids": [
+        "SRC-PUBLIC-FICTION"
+      ]
+    }
+  ]
+}
