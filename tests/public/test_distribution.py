@@ -231,6 +231,8 @@ class DistributionContractTests(unittest.TestCase):
         self.assertIn("retention-days: 30", workflow)
         self.assertIn("if-no-files-found: error", workflow)
         self.assertIn("candidate/release-candidate.json", workflow)
+        self.assertIn("python -m tools.release_candidate create", workflow)
+        self.assertNotIn("python tools/release_candidate.py", workflow)
         self.assertIn("github.event_name == 'push'", workflow)
         self.assertIn("github.event_name == 'workflow_dispatch'", workflow)
         self.assertIn("github.ref == 'refs/heads/main'", workflow)
@@ -303,8 +305,8 @@ class DistributionContractTests(unittest.TestCase):
             "github-token: ${{ secrets.GITHUB_TOKEN }}",
             "run-id: ${{ inputs.source_run_id }}",
             "name: ${{ inputs.candidate_artifact_name }}",
-            "tools/release_candidate.py verify-run",
-            "tools/release_candidate.py verify-candidate",
+            "python -m tools.release_candidate verify-run",
+            "python -m tools.release_candidate verify-candidate",
             "fetch-depth: 0",
             "ref: ${{ inputs.tag }}",
         ):
@@ -319,11 +321,12 @@ class DistributionContractTests(unittest.TestCase):
             workflow,
         )
         self.assertNotIn("fi      - name:", workflow)
+        self.assertNotIn("python tools/release_candidate.py", workflow)
         self.assertIn("--no-index --no-deps", workflow)
         self.assertIn("examples/minimal/output-preliminary", workflow)
         self.assertIn("examples/minimal/output-formal", workflow)
         download_position = workflow.index("actions/download-artifact@v4")
-        verify_position = workflow.index("tools/release_candidate.py verify-candidate")
+        verify_position = workflow.index("python -m tools.release_candidate verify-candidate")
         release_position = workflow.index("softprops/action-gh-release")
         self.assertLess(download_position, verify_position)
         self.assertLess(verify_position, release_position)

@@ -57,7 +57,7 @@ jobs:
           SOURCE_RUN_ID: ${{ inputs.source_run_id }}
           PUBLIC_COMMIT: ${{ inputs.public_commit }}
         run: >-
-          python tools/release_candidate.py verify-run --run-json source-run.json --repository "$GITHUB_REPOSITORY" --ci-run-id "$SOURCE_RUN_ID" --public-commit "$PUBLIC_COMMIT"
+          python -m tools.release_candidate verify-run --run-json source-run.json --repository "$GITHUB_REPOSITORY" --ci-run-id "$SOURCE_RUN_ID" --public-commit "$PUBLIC_COMMIT"
       - name: Download the exact authorized candidate
         uses: actions/download-artifact@v4
         with:
@@ -72,7 +72,7 @@ jobs:
           CANDIDATE_ARTIFACT_NAME: ${{ inputs.candidate_artifact_name }}
           CANDIDATE_MANIFEST_SHA256: ${{ inputs.candidate_manifest_sha256 }}
         run: >-
-          python tools/release_candidate.py verify-candidate --candidate-dir candidate --public-commit "$PUBLIC_COMMIT" --ci-run-id "$SOURCE_RUN_ID" --artifact-name "$CANDIDATE_ARTIFACT_NAME" --manifest-sha256 "$CANDIDATE_MANIFEST_SHA256"
+          python -m tools.release_candidate verify-candidate --candidate-dir candidate --public-commit "$PUBLIC_COMMIT" --ci-run-id "$SOURCE_RUN_ID" --artifact-name "$CANDIDATE_ARTIFACT_NAME" --manifest-sha256 "$CANDIDATE_MANIFEST_SHA256"
       - name: Install the downloaded wheel and run read-only smoke checks
         run: |
           python -m venv .release-venv

@@ -54,7 +54,7 @@ jobs:
           python -c "from pathlib import Path; from tools.release_artifacts import build_candidate_release; build_candidate_release(Path('.candidate-source'), Path('candidate'), Path('.candidate-source/release/public-release-policy.json'), Path('.candidate-offline'))"
       - name: Bind the candidate to this commit and run
         run: >-
-          python tools/release_candidate.py create --candidate-dir candidate --public-commit ${{ github.sha }} --ci-run-id ${{ github.run_id }} --artifact-name release-candidate-${{ github.sha }}-${{ github.run_id }}
+          python -m tools.release_candidate create --candidate-dir candidate --public-commit ${{ github.sha }} --ci-run-id ${{ github.run_id }} --artifact-name release-candidate-${{ github.sha }}-${{ github.run_id }}
       - name: Upload the immutable release candidate
         uses: actions/upload-artifact@v4
         with:
