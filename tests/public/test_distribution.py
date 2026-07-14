@@ -199,12 +199,22 @@ class DistributionContractTests(unittest.TestCase):
         self.assertEqual(workflow.count("ubuntu-latest"), 1)
         for command in (
             "python -m unittest discover -s tests/public -t . -v",
-            "python -m pip install --upgrade pip build",
+            'python -m pip install --upgrade pip build "setuptools>=68" wheel',
             "chemical_eia_core-0.1.0-py3-none-any.whl",
             "examples/minimal/model.json",
             "SHA256SUMS.txt",
         ):
             self.assertIn(command, workflow)
+
+    def test_ci_and_release_workflows_install_declared_build_backend(self):
+        expected = 'run: python -m pip install --upgrade pip build "setuptools>=68" wheel'
+        for relative in (
+            ".github/workflows/test.yml",
+            ".github/workflows/release.yml",
+        ):
+            with self.subTest(workflow=relative):
+                workflow = (ROOT / relative).read_text(encoding="utf-8")
+                self.assertIn(expected, workflow)
 
     def test_release_workflow_is_manual_v010_prerelease_with_exact_assets(self):
         workflow = (ROOT / ".github/workflows/release.yml").read_text(
