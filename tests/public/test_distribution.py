@@ -314,6 +314,11 @@ class DistributionContractTests(unittest.TestCase):
         self.assertIn("git rev-parse", workflow)
         self.assertIn("gh api", workflow)
         self.assertIn("gh release view", workflow)
+        self.assertIn(
+            "          fi\n      - name: Create the approved GitHub prerelease",
+            workflow,
+        )
+        self.assertNotIn("fi      - name:", workflow)
         self.assertIn("--no-index --no-deps", workflow)
         self.assertIn("examples/minimal/output-preliminary", workflow)
         self.assertIn("examples/minimal/output-formal", workflow)
