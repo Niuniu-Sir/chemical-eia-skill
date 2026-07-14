@@ -14,6 +14,11 @@ Create the smallest reproducer that demonstrates the behavior. Preserve node and
 
 Keep commits focused. Add a failing public test before changing behavior, implement the smallest correction, and run the full public suite. Changes to release files, package metadata, the canonical Skill, the adapter, or artifact membership require explicit review of their distribution impact.
 
+## Release candidates
+
+After the full Windows, Ubuntu, and Python matrix succeeds on `main`, one canonical Ubuntu job builds a uniquely named release candidate. Release authorization binds the candidate artifact name, its manifest digest, the source commit, the CI run, and every published asset digest.
+
+The release workflow only downloads and verifies that approved candidate; it never rebuilds release assets. Contributors must not hand-edit, replace, rename, or repackage candidate files. Any candidate change requires a new successful main CI run and a new authorization.
 ## Review expectations
 
 Reviewers check deterministic behavior, compatibility with Python 3.10 through 3.13, fictional-data boundaries, archive safety, documentation clarity, and whether technician authority remains explicit. A passing test suite does not override a security or confidentiality concern.

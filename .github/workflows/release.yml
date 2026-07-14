@@ -7,37 +7,96 @@ on:
         description: Exact approved release tag
         required: true
         type: string
+      public_commit:
+        description: Exact approved public commit
+        required: true
+        type: string
+      source_run_id:
+        description: Successful main CI run that owns the candidate
+        required: true
+        type: string
+      candidate_artifact_name:
+        description: Exact approved Actions artifact name
+        required: true
+        type: string
+      candidate_manifest_sha256:
+        description: Exact approved release-candidate.json SHA-256
+        required: true
+        type: string
 
 permissions:
   contents: write
+  actions: read
 
 jobs:
   release:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - name: Require the approved tag
+      - name: Verify the approved annotated tag and commit
         env:
           RELEASE_TAG: ${{ inputs.tag }}
-        run: python -c "import os; assert os.environ['RELEASE_TAG'] == 'v0.1.0', 'tag must be v0.1.0'"
-      - name: Install build tools
-        run: python -m pip install --upgrade pip build "setuptools>=68" wheel
-      - name: Run all public tests
-        run: python -m unittest discover -s tests/public -t . -v
-      - name: Build, inspect, rebuild offline, and checksum assets
+          PUBLIC_COMMIT: ${{ inputs.public_commit }}
+        run: |
+          test "$RELEASE_TAG" = "v0.1.0"
+          test "$(git cat-file -t "$RELEASE_TAG")" = "tag"
+          test "$(git rev-parse "${RELEASE_TAG}^{}")" = "$PUBLIC_COMMIT"
+      - name: Download the successful source-run identity
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+        run: gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}" > source-run.json
+      - name: Verify the source run belongs to this commit
+        env:
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          PUBLIC_COMMIT: ${{ inputs.public_commit }}
         run: >-
-          python -c "import json, tempfile; from pathlib import Path; from tools.public_checksums import verify_sha256s, write_sha256s; from tools.release_artifacts import build_artifacts, build_skill_archive, inspect_artifact, rebuild_wheel_from_sdist; root=Path('.'); dist=Path('dist'); policy=json.loads(Path('release/public-release-policy.json').read_text(encoding='utf-8')); wheel,sdist=build_artifacts(root,dist); skill=build_skill_archive(Path('skills/analyzing-chemical-eia-processes'),dist/'analyzing-chemical-eia-processes-0.1.0.zip'); assert inspect_artifact(wheel,policy['wheel_exact_files']) == []; assert inspect_artifact(sdist,policy['sdist_exact_files']+policy['sdist_exact_directories']) == []; assert inspect_artifact(skill,policy['skill_zip_exact_files']) == []; temporary=tempfile.TemporaryDirectory(); rebuilt=rebuild_wheel_from_sdist(sdist,Path(temporary.name)); assert inspect_artifact(rebuilt,policy['wheel_exact_files']) == []; manifest=write_sha256s([skill,wheel,sdist],dist/'SHA256SUMS.txt'); verify_sha256s(manifest,dist,[skill.name,wheel.name,sdist.name]); temporary.cleanup()"
-      - name: Create the approved GitHub prerelease
+          python tools/release_candidate.py verify-run --run-json source-run.json --repository "$GITHUB_REPOSITORY" --ci-run-id "$SOURCE_RUN_ID" --public-commit "$PUBLIC_COMMIT"
+      - name: Download the exact authorized candidate
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ inputs.source_run_id }}
+          name: ${{ inputs.candidate_artifact_name }}
+          path: candidate
+      - name: Verify candidate identity and every asset byte
+        env:
+          PUBLIC_COMMIT: ${{ inputs.public_commit }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          CANDIDATE_ARTIFACT_NAME: ${{ inputs.candidate_artifact_name }}
+          CANDIDATE_MANIFEST_SHA256: ${{ inputs.candidate_manifest_sha256 }}
+        run: >-
+          python tools/release_candidate.py verify-candidate --candidate-dir candidate --public-commit "$PUBLIC_COMMIT" --ci-run-id "$SOURCE_RUN_ID" --artifact-name "$CANDIDATE_ARTIFACT_NAME" --manifest-sha256 "$CANDIDATE_MANIFEST_SHA256"
+      - name: Install the downloaded wheel and run read-only smoke checks
+        run: |
+          python -m venv .release-venv
+          .release-venv/bin/python -m pip install --no-index --no-deps candidate/chemical_eia_core-0.1.0-py3-none-any.whl
+          .release-venv/bin/python -m chemical_eia.cli --help
+          .release-venv/bin/python -m chemical_eia.cli examples/minimal/model.json --output-dir examples/minimal/output-preliminary
+          .release-venv/bin/python -m chemical_eia.cli examples/minimal/model.json --decisions examples/minimal/decisions.json --output-dir examples/minimal/output-formal
+      - name: Refuse to overwrite an existing release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "A release already exists for $RELEASE_TAG" >&2
+            exit 1
+          fi      - name: Create the approved GitHub prerelease from candidate bytes
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.tag }}
           prerelease: true
           body_path: docs/release-notes/v0.1.0.md
+          fail_on_unmatched_files: true
           files: |
-            dist/chemical_eia_core-0.1.0-py3-none-any.whl
-            dist/chemical_eia_core-0.1.0.tar.gz
-            dist/analyzing-chemical-eia-processes-0.1.0.zip
-            dist/SHA256SUMS.txt
+            candidate/chemical_eia_core-0.1.0-py3-none-any.whl
+            candidate/chemical_eia_core-0.1.0.tar.gz
+            candidate/analyzing-chemical-eia-processes-0.1.0.zip
+            candidate/SHA256SUMS.txt

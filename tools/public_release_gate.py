@@ -32,6 +32,7 @@ from tools.public_scan import (
     scan_source_tree,
 )
 from tools.release_artifacts import CandidateBuildError, ReleaseArtifacts, build_candidate_release
+from tools.release_candidate import candidate_artifact_name
 
 
 _STEP_STATUS = Literal["passed", "failed"]
@@ -729,6 +730,14 @@ class CiRunReceipt:
     url: str
 
 
+@dataclass(frozen=True)
+class ReleaseCandidateReceipt:
+    artifact_name: str
+    manifest_sha256: str
+    public_commit: str
+    run_id: int
+
+
 class AuthorizationError(RuntimeError):
     """Raised when a public release action lacks exact user authorization."""
 
@@ -893,6 +902,30 @@ def _validate_ci_run(ci_run: CiRunReceipt, public_commit: str) -> None:
         raise AuthorizationError("release authorization CI matrix does not match policy")
 
 
+def _validate_release_candidate(
+    candidate: ReleaseCandidateReceipt,
+    public_commit: str,
+    ci_run: CiRunReceipt,
+) -> None:
+    if not isinstance(candidate, ReleaseCandidateReceipt):
+        raise AuthorizationError("release candidate receipt is invalid")
+    if candidate.public_commit != public_commit:
+        raise AuthorizationError("release candidate commit does not match")
+    if (
+        isinstance(candidate.run_id, bool)
+        or not isinstance(candidate.run_id, int)
+        or candidate.run_id != ci_run.run_id
+    ):
+        raise AuthorizationError("release candidate run ID does not match")
+    expected_artifact_name = candidate_artifact_name(public_commit, ci_run.run_id)
+    if candidate.artifact_name != expected_artifact_name:
+        raise AuthorizationError("release candidate artifact name does not match")
+    if (
+        not isinstance(candidate.manifest_sha256, str)
+        or _DIGEST_RE.fullmatch(candidate.manifest_sha256) is None
+    ):
+        raise AuthorizationError("release candidate manifest digest is invalid")
+
 def _assert_authorization_destination(
     receipt: PublicRepositoryReceipt,
     destination: Path,
@@ -914,11 +947,13 @@ def _assert_authorization_destination(
 def render_release_authorization_packet(
     receipt: PublicRepositoryReceipt,
     ci_run: CiRunReceipt,
+    candidate: ReleaseCandidateReceipt,
     artifacts: ReleaseArtifacts,
     destination: Path,
 ) -> Path:
     _, destination = _assert_authorization_destination(receipt, destination)
     _validate_ci_run(ci_run, receipt.initial_commit)
+    _validate_release_candidate(candidate, receipt.initial_commit, ci_run)
     asset_names = _validate_authorization_artifacts(artifacts)
 
     lines = [
@@ -940,6 +975,13 @@ def render_release_authorization_packet(
         f"- CI run：{ci_run.url}",
         f"- 总结论：`{ci_run.conclusion}`",
         "",
+        "## 唯一规范发布候选",
+        "",
+        f"- Actions artifact：`{candidate.artifact_name}`",
+        f"- 候选 manifest SHA-256：`{candidate.manifest_sha256}`",
+        f"- 候选公开提交：`{candidate.public_commit}`",
+        f"- 候选 CI run ID：`{candidate.run_id}`",
+        "",
         "| 系统 | Python | 结果 |",
         "|---|---|---|",
     ]
@@ -959,13 +1001,13 @@ def render_release_authorization_packet(
             "",
             "本次授权仅包括：创建并推送 `v0.1.0` annotated tag、调度正式发布工作流、创建标记为 prerelease 的 GitHub Release。",
             "",
-            "授权必须同时绑定本页公开提交、CI run、四个资产摘要和 prerelease 状态；任何一项变化都需要重新生成授权包并再次确认。",
+            "授权必须同时绑定本页公开提交、CI run、Actions artifact 名称、候选 manifest 摘要、四个资产摘要和 prerelease 状态；任何一项变化都需要重新生成授权包并再次确认。",
             "",
             "## 回滚边界",
             "",
             "- 标签推送前扫描失败：只删除尚未推送的本地标签并停止。",
             "- 发布工作流失败：不得手工绕过检查创建 Release。",
-            "- 已发布资产与摘要不一致：停止传播并重新从固定公开提交构建，不覆盖旧资产。",
+            "- 已发布资产与候选字节不一致：停止传播并保存证据；未经新的明确撤回授权不得删除远程 Release 或标签，也不得重新构建替换资产。",
         ]
     )
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -989,6 +1031,7 @@ def assert_release_authorization(
     *,
     artifacts: ReleaseArtifacts,
     ci_run: CiRunReceipt,
+    candidate: ReleaseCandidateReceipt,
 ) -> None:
     if _COMMIT_RE.fullmatch(public_commit) is None:
         raise AuthorizationError("public commit is invalid")
@@ -996,6 +1039,7 @@ def assert_release_authorization(
         raise AuthorizationError("preview release tag is invalid")
     asset_names = _validate_authorization_artifacts(artifacts)
     _validate_ci_run(ci_run, public_commit)
+    _validate_release_candidate(candidate, public_commit, ci_run)
 
     path = Path(authorization_record)
     if not path.is_file() or path.is_symlink():
@@ -1013,6 +1057,8 @@ def assert_release_authorization(
         "prerelease",
         "ci_workflow",
         "ci_run_id",
+        "candidate_artifact_name",
+        "candidate_manifest_sha256",
         "asset_sha256",
         "approved_actions",
         "approved_by",
@@ -1031,6 +1077,10 @@ def assert_release_authorization(
         raise AuthorizationError("preview release target or status is not approved")
     if document["ci_workflow"] != ci_run.workflow or document["ci_run_id"] != ci_run.run_id:
         raise AuthorizationError("preview release CI run does not match")
+    if document["candidate_artifact_name"] != candidate.artifact_name:
+        raise AuthorizationError("preview release candidate artifact does not match")
+    if document["candidate_manifest_sha256"] != candidate.manifest_sha256:
+        raise AuthorizationError("preview release candidate manifest does not match")
     expected_digests = {name: artifacts.sha256[name] for name in asset_names}
     if document["asset_sha256"] != expected_digests:
         raise AuthorizationError("preview release asset digests do not match")

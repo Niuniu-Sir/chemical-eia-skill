@@ -32,3 +32,38 @@ jobs:
       - name: Install wheel in a clean environment and run smoke tests
         run: >-
           python -c "import os, subprocess, sys; from pathlib import Path; env=Path('.release-venv'); subprocess.run([sys.executable,'-m','venv',str(env)],check=True); py=env/('Scripts/python.exe' if os.name == 'nt' else 'bin/python'); wheel=Path('dist/chemical_eia_core-0.1.0-py3-none-any.whl'); subprocess.run([str(py),'-m','pip','install','--no-index','--no-deps',str(wheel)],check=True); subprocess.run([str(py),'-m','chemical_eia.cli','--help'],check=True); subprocess.run([str(py),'-m','chemical_eia.cli','examples/minimal/model.json','--output-dir','.release-smoke'],check=True)"
+  release-candidate:
+    needs: public-tests
+    if: >-
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install canonical build tools
+        run: python -m pip install --upgrade pip build==1.5.1 setuptools==83.0.0 wheel==0.47.0
+      - name: Export the exact public commit without Git metadata
+        run: |
+          mkdir -p .candidate-source
+          git archive --format=tar HEAD | tar -xf - -C .candidate-source
+      - name: Build and verify the canonical release candidate
+        run: >-
+          python -c "from pathlib import Path; from tools.release_artifacts import build_candidate_release; build_candidate_release(Path('.candidate-source'), Path('candidate'), Path('.candidate-source/release/public-release-policy.json'), Path('.candidate-offline'))"
+      - name: Bind the candidate to this commit and run
+        run: >-
+          python tools/release_candidate.py create --candidate-dir candidate --public-commit ${{ github.sha }} --ci-run-id ${{ github.run_id }} --artifact-name release-candidate-${{ github.sha }}-${{ github.run_id }}
+      - name: Upload the immutable release candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-candidate-${{ github.sha }}-${{ github.run_id }}
+          path: |
+            candidate/analyzing-chemical-eia-processes-0.1.0.zip
+            candidate/chemical_eia_core-0.1.0-py3-none-any.whl
+            candidate/chemical_eia_core-0.1.0.tar.gz
+            candidate/SHA256SUMS.txt
+            candidate/release-candidate.json
+          if-no-files-found: error
+          retention-days: 30

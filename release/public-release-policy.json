@@ -34,12 +34,14 @@
     "tests/public/test_artifacts.py",
     "tests/public/test_cli_and_example.py",
     "tests/public/test_distribution.py",
+    "tests/public/test_release_candidate.py",
     "tests/public/test_release_safety.py",
     "tests/public/test_skill_and_adapter.py",
     "tools/public_checksums.py",
     "tools/public_release_gate.py",
     "tools/public_scan.py",
-    "tools/release_artifacts.py"
+    "tools/release_artifacts.py",
+    "tools/release_candidate.py"
   ],
   "managed_files": [
     "MANIFEST.in",
@@ -58,7 +60,8 @@
     "tools/public_checksums.py",
     "tools/public_release_gate.py",
     "tools/public_scan.py",
-    "tools/release_artifacts.py"
+    "tools/release_artifacts.py",
+    "tools/release_candidate.py"
   ],
   "public_owned_files": [
     ".github/workflows/release.yml",
@@ -80,6 +83,7 @@
     "tests/public/test_artifacts.py",
     "tests/public/test_cli_and_example.py",
     "tests/public/test_distribution.py",
+    "tests/public/test_release_candidate.py",
     "tests/public/test_release_safety.py",
     "tests/public/test_skill_and_adapter.py"
   ],

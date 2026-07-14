@@ -131,6 +131,9 @@ class DistributionContractTests(unittest.TestCase):
         self.assertIn("credentials", security)
         self.assertIn("fictional", contributing)
         self.assertIn("Apache-2.0", contributing)
+        self.assertIn("## Release candidates", contributing)
+        self.assertIn("never rebuilds", contributing)
+        self.assertIn("must not hand-edit", contributing)
         self.assertIn("not provide regulatory conclusions", support)
         self.assertIn("[Unreleased]", changelog)
         self.assertIn("[0.1.0] - 2026-07-13", changelog)
@@ -199,8 +202,9 @@ class DistributionContractTests(unittest.TestCase):
             workflow,
             r'python-version: \["3\.10", "3\.11", "3\.12", "3\.13"\]',
         )
-        self.assertEqual(workflow.count("windows-latest"), 1)
-        self.assertEqual(workflow.count("ubuntu-latest"), 1)
+        matrix_block = workflow.split("matrix:", 1)[1].split("steps:", 1)[0]
+        self.assertEqual(matrix_block.count("windows-latest"), 1)
+        self.assertEqual(matrix_block.count("ubuntu-latest"), 1)
         for command in (
             "python -m unittest discover -s tests/public -t . -v",
             'python -m pip install --upgrade pip build "setuptools>=68" wheel',
@@ -210,15 +214,42 @@ class DistributionContractTests(unittest.TestCase):
         ):
             self.assertIn(command, workflow)
 
-    def test_ci_and_release_workflows_install_declared_build_backend(self):
-        expected = 'run: python -m pip install --upgrade pip build "setuptools>=68" wheel'
-        for relative in (
-            ".github/workflows/test.yml",
-            ".github/workflows/release.yml",
-        ):
-            with self.subTest(workflow=relative):
-                workflow = (ROOT / relative).read_text(encoding="utf-8")
-                self.assertIn(expected, workflow)
+    def test_ci_workflow_builds_one_canonical_candidate(self):
+        workflow = (ROOT / ".github/workflows/test.yml").read_text(encoding="utf-8")
+        self.assertEqual(workflow.count("  release-candidate:\n"), 1)
+        self.assertIn("needs: public-tests", workflow)
+        self.assertIn("runs-on: ubuntu-latest", workflow)
+        self.assertIn('python-version: "3.13"', workflow)
+        self.assertIn("build==1.5.1", workflow)
+        self.assertIn("setuptools==83.0.0", workflow)
+        self.assertIn("wheel==0.47.0", workflow)
+        self.assertIn(
+            "release-candidate-${{ github.sha }}-${{ github.run_id }}",
+            workflow,
+        )
+        self.assertIn("actions/upload-artifact@v4", workflow)
+        self.assertIn("retention-days: 30", workflow)
+        self.assertIn("if-no-files-found: error", workflow)
+        self.assertIn("candidate/release-candidate.json", workflow)
+        self.assertIn("github.event_name == 'push'", workflow)
+        self.assertIn("github.event_name == 'workflow_dispatch'", workflow)
+        self.assertIn("github.ref == 'refs/heads/main'", workflow)
+        self.assertIn("build_candidate_release", workflow)
+        self.assertIn("git archive --format=tar HEAD", workflow)
+        self.assertNotIn("contents: write", workflow)
+        self.assertNotIn("actions: write", workflow)
+        matrix_block = workflow.split("matrix:", 1)[1].split("steps:", 1)[0]
+        self.assertIn("os: [windows-latest, ubuntu-latest]", matrix_block)
+        self.assertIn(
+            'python-version: ["3.10", "3.11", "3.12", "3.13"]',
+            matrix_block,
+        )
+    def test_ci_matrix_installs_declared_build_backend(self):
+        workflow = (ROOT / ".github/workflows/test.yml").read_text(encoding="utf-8")
+        self.assertIn(
+            'run: python -m pip install --upgrade pip build "setuptools>=68" wheel',
+            workflow,
+        )
 
     def test_release_workflow_is_manual_v010_prerelease_with_exact_assets(self):
         workflow = (ROOT / ".github/workflows/release.yml").read_text(
@@ -230,26 +261,67 @@ class DistributionContractTests(unittest.TestCase):
         self.assertNotRegex(trigger_block, r"(?m)^\s*push:")
         self.assertNotIn("release:", trigger_block)
         self.assertNotRegex(workflow, r"(?m)^\s+tags:")
-        self.assertRegex(workflow, r"(?m)^permissions:\n  contents: write$")
-        self.assertIn('required: true', workflow)
-        self.assertIn('v0.1.0', workflow)
-        self.assertIn('prerelease: true', workflow)
-        self.assertIn('docs/release-notes/v0.1.0.md', workflow)
-        for asset in (
-            "dist/chemical_eia_core-0.1.0-py3-none-any.whl",
-            "dist/chemical_eia_core-0.1.0.tar.gz",
-            "dist/analyzing-chemical-eia-processes-0.1.0.zip",
-            "dist/SHA256SUMS.txt",
-        ):
-            self.assertEqual(workflow.count(asset), 1, asset)
-        test_position = workflow.index(
-            "python -m unittest discover -s tests/public -t . -v"
+        self.assertRegex(
+            workflow,
+            r"(?m)^permissions:\n  contents: write\n  actions: read$",
         )
-        release_position = workflow.index("softprops/action-gh-release")
-        self.assertLess(test_position, release_position)
-        self.assertIn("rebuild_wheel_from_sdist", workflow[:release_position])
-        self.assertIn("verify_sha256s", workflow[:release_position])
+        self.assertIn("prerelease: true", workflow)
+        self.assertIn("body_path: docs/release-notes/v0.1.0.md", workflow)
+        expected_assets = {
+            "candidate/chemical_eia_core-0.1.0-py3-none-any.whl",
+            "candidate/chemical_eia_core-0.1.0.tar.gz",
+            "candidate/analyzing-chemical-eia-processes-0.1.0.zip",
+            "candidate/SHA256SUMS.txt",
+        }
+        files_block = workflow.split("files: |", 1)[1]
+        actual_assets = {
+            line.strip()
+            for line in files_block.splitlines()
+            if line.strip()
+        }
+        self.assertEqual(actual_assets, expected_assets)
+        self.assertNotIn("candidate/release-candidate.json", actual_assets)
 
+    def test_release_workflow_reuses_authorized_candidate_bytes(self):
+        workflow = (ROOT / ".github/workflows/release.yml").read_text(
+            encoding="utf-8"
+        )
+        for forbidden in (
+            "python -m build",
+            "build_artifacts",
+            "build_skill_archive",
+            "rebuild_wheel_from_sdist",
+        ):
+            self.assertNotIn(forbidden, workflow)
+        for required in (
+            "public_commit:",
+            "source_run_id:",
+            "candidate_artifact_name:",
+            "candidate_manifest_sha256:",
+            "actions: read",
+            "actions/download-artifact@v4",
+            "github-token: ${{ secrets.GITHUB_TOKEN }}",
+            "run-id: ${{ inputs.source_run_id }}",
+            "name: ${{ inputs.candidate_artifact_name }}",
+            "tools/release_candidate.py verify-run",
+            "tools/release_candidate.py verify-candidate",
+            "fetch-depth: 0",
+            "ref: ${{ inputs.tag }}",
+        ):
+            self.assertIn(required, workflow)
+        self.assertEqual(workflow.count("required: true"), 5)
+        self.assertIn("git cat-file -t", workflow)
+        self.assertIn("git rev-parse", workflow)
+        self.assertIn("gh api", workflow)
+        self.assertIn("gh release view", workflow)
+        self.assertIn("--no-index --no-deps", workflow)
+        self.assertIn("examples/minimal/output-preliminary", workflow)
+        self.assertIn("examples/minimal/output-formal", workflow)
+        download_position = workflow.index("actions/download-artifact@v4")
+        verify_position = workflow.index("tools/release_candidate.py verify-candidate")
+        release_position = workflow.index("softprops/action-gh-release")
+        self.assertLess(download_position, verify_position)
+        self.assertLess(verify_position, release_position)
 
 if __name__ == "__main__":
     unittest.main()
