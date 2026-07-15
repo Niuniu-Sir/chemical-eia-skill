@@ -119,6 +119,38 @@ class DistributionContractTests(unittest.TestCase):
         self.assertNotIn("http://", readme)
         self.assertNotIn("https://", readme)
 
+    def test_readme_leads_with_chinese_and_preserves_english(self):
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        chinese_headings = (
+            "# 化工环评工程分析技能包",
+            "## 这是做什么的",
+            "## v0.1.0 Preview 现在能做什么",
+            "## 当前还不能做什么",
+            "## 下载与安装",
+            "## 五分钟运行示例",
+            "## 会生成哪些文件",
+            "## preliminary 和 formal 的区别",
+            "## 谁负责什么",
+            "## 支持环境",
+            "## 安全和使用边界",
+            "## English documentation",
+        )
+        for heading in chinese_headings:
+            self.assertIn(heading, readme)
+        positions = [readme.index(heading) for heading in chinese_headings]
+        self.assertEqual(positions, sorted(positions))
+        self.assertLess(positions[-1], readme.index("# Chemical EIA Process Analysis"))
+        for marker in (
+            "结构化工序建模",
+            "节点和流股",
+            "技术员确认",
+            "不能保证",
+            "完整工程分析",
+            "Releases",
+            "analyzing-chemical-eia-processes-0.1.0.zip",
+        ):
+            self.assertIn(marker, readme)
+
     def test_governance_documents_cover_release_boundaries(self):
         security = (ROOT / "SECURITY.md").read_text(encoding="utf-8")
         contributing = (ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8")
